@@ -7,6 +7,11 @@ The game "Friday Night Funkin" is similar to the well-known "Guitar Hero", meani
 
 But what if we had a computer program that is able to play the game for us? This is exactly what this project is about. I developed a bot written in Python that is called "mbot" and this bot is able to beat the game on the hardest difficulty without any problems (even though it doesn't play perfectly).
 
+I used the following website as a framework to guide me through the process of developing the bot:
+<https://code.tutsplus.com/how-to-build-a-python-bot-that-can-play-web-games--active-11117t>
+
+There were a number of challenges I had to overcome despite this guideline: First, the guide is written for Windows and I am using Mac OS X, so the python modules to interact with the system are different and I had to do my own research. Second, the guide is for a different game, "Sushi Go Round", which has a more complicated game concept than "Friday Night Funkin", but is less speedy. This meant that the algorithm of how my bot should work would become simpler do design, but I needed to put much more emphasis on a fast performance and reaction time, which will be elaborated on later in this readme. Last, "Sushi Go Round" is played with a mouse and "Friday Night Funkin" is played by keyboard, again resulting in different modules being needed to interact with the game.
+
 ### Developing Process:
 More sophisticated bots act between the game and the player, using data directly from the game and giving their outputs to the game directly at the same time. My bot, however, mimicks a player, by using the exact same way to obtain data from the game and also using the same output method, in this case keypresses. The advantage of using this simpler method is that I don't need any special interface to the game nor understanding of how it was programmed. Creating this type of bot will be quicker, although a bot with direct connection to the game would most likely have superior performance and use less computing power.
 
