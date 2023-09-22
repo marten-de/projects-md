@@ -1,8 +1,11 @@
 # a script that allows to pitch 2 bots against each other and gives back their match results
 
 import chess_v3 as my_chess
+
+
+# put in two different bot versions here to let them play against each other
+#import chess_bot_v1 as my_bot1
 import chess_bot_v2 as my_bot2
-import chess_bot_v1 as my_bot1
 
 THINKING_TIME_STANDARD = 3
 

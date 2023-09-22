@@ -7,7 +7,21 @@ The goal of this project is to program a playable chess game in Python. It will 
 
 ### Quick Start Guide
 
-Launch "main.py", and a game where you play as white will start, the bot will play black in this case. Once the game ends, a message about the result will be printed to the console (not the GUI) and no further action will be possible in the GUI. So just close the window and re-launch "main.py" for another game!
+Python3 needs to be already installed on your system.
+
+All modules used by this project also need to be installed. If you don't already have them, you can run the following code from the console while in the mchess directory:
+
+```
+pip install -r requirements.txt
+```
+
+To start the game, run the following command from the console:
+
+```
+python3 main.py
+```
+
+A game where you play as white will start, the bot will play black in this case. Once the game ends, a message about the result will be printed to the console (not the GUI) and no further action will be possible in the GUI. So just close the window and re-launch "main.py" for another game!
 
 If you want to play as black, you need to change the parameter "my_chess.WHITE" to "my_chess.BLACK" in the main function. Note that this is not recommended in the current version, because the board display can not be flipped yet.
 
@@ -117,12 +131,12 @@ Note that only the most recent version is published in this repository. The info
 ### Possible Future Tweaks and Changes
 
 *Chess Module*
-- Improve calculation speed of the bot and/ or chess module by using NumPy, Cython, Numba, Jax, PyPy, custom C extensions, ...
+- Improve calculation speed of the bot and/ or chess module by using NumPy, Cython, Numba, Jax, PyPI, custom C extensions, ...
 - Adjust instance variable status private/ public (so far all are public)
 - Allow tracking of moves back and forth (so far only undoing moves is possible)
 
 *Bot*
-- Track down reason for big spread in puzzle performance
+- Track down reason for big spread in puzzle performance and random blunders
 - Try out Python's deep learning module to make the chess bot stronger through playing against itself
 - Implement fixed movetime (currently minimum movetime plus a flexible amount)
 - Program interface for Lichess and let the bot play there on a registered bot account
