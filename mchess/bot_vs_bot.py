@@ -4,7 +4,7 @@ import chess_v3 as my_chess
 
 
 # put in two different bot versions here to let them play against each other
-#import chess_bot_v1 as my_bot1
+#import chess_bot_v2_old as my_bot1
 import chess_bot_v2 as my_bot2
 
 THINKING_TIME_STANDARD = 3

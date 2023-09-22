@@ -312,11 +312,13 @@ class Chessbot:
         prev_best_move = None
         while datetime.datetime.now() < stop:
             
-            # the transposition table needs to be cleared for each new iteration, otherwise it will be filled up with evaluation from shallower depths, resulting in all of our deeper searches being cancelled early
-            self.transpositions.clear()
-            
             best_eval, best_move = self.recursive_search(depth, ALPHA_INITIAL, BETA_INITIAL, start_move=prev_best_move)
             
+            # print debug info
+            print(depth)
+            print(best_eval)
+            print(best_move)
+
             # starting with the best found move for the next iteration to maximize alpha-beta-pruning
             prev_best_move = best_move
 
@@ -334,7 +336,8 @@ class Chessbot:
 
         # early termination if the position was already evaluated
         if current_hash in self.transpositions:
-            return self.transpositions[current_hash]
+            if self.transpositions[current_hash][0] >= depth:
+                return self.transpositions[current_hash][1]
 
         # if we dont include this condition, the bot can repeat moves in a winning position until the game is drawn
         if self.board.gameover:
@@ -377,16 +380,11 @@ class Chessbot:
                 best_move = move
             
         # storing the newly found evaluation and best move in the transposition table before returning
-        self.transpositions[current_hash] = (alpha, best_move)
+        self.transpositions[current_hash] = (depth,(alpha, best_move))
         return (alpha, best_move)
 
     # this search only considers capture moves. the rest of the functionality is identical to the search function, but notably this one doesnt have a depth limit and will continue until there are no more captures possible
     def search_all_captures(self, alpha, beta):
-
-        # checking if there is already an evaluation for this position in the transition table
-        current_hash = self.hash_zobrist()
-        if current_hash in self.transpositions:
-            return self.transpositions[current_hash]
 
         # see if any good non-captures exist first, otherwise we might return a bad evaluation of a good position if only bad captures are available
         evaluation = self.rel_evaluate()
@@ -410,7 +408,6 @@ class Chessbot:
             
             alpha = max(alpha, evaluation)
 
-        self.transpositions[current_hash] = (alpha, None)
         return (alpha, None)
 
     # this function orders moves from best to worse and is a support function for our search. of course we dont know in advance how good a move is, so we need to guess.

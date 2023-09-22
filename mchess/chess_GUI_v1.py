@@ -2,6 +2,9 @@
 
 import PySimpleGUI as sg
 import os
+from PIL import Image
+import io
+import base64
 
 import chess_v3 as my_chess
 import chess_bot_v2 as my_bot
@@ -16,6 +19,26 @@ def block_focus(window):
         element = window[key]
         if isinstance(element, sg.Button):
             element.block_focus()
+
+# this function overlays two images, we use it to highlight squares by putting a frame or circle around the square
+def overlay(file1_path, file2_path):
+
+    img1 = Image.open(file1_path)
+    img2 = Image.open(file2_path)
+
+    # Pasting img2 image on top of img1 
+    # starting at coordinates (0, 0)
+    img1.paste(img2, (0,0), mask = img2)
+
+    return img1
+
+# an intermediary function that is needed to pass PIL images as arguments to PySimpleGUI
+def convert_to_bytes(pil_img, resize=None):
+   img = pil_img
+   with io.BytesIO() as bio:
+      img.save(bio, format="PNG")
+      del img
+      return bio.getvalue()
 
 # endregion
 
@@ -40,6 +63,8 @@ WROOK_PATH = os.path.join(IMAGE_PATH, "wrook.png")
 BBISHOP_PATH = os.path.join(IMAGE_PATH, "bbishop.png")
 WBISHOP_PATH = os.path.join(IMAGE_PATH, "wbishop.png")
 NO_PIECE_PATH = os.path.join(IMAGE_PATH, "blank.png")
+FRAME_PATH = os.path.join(IMAGE_PATH, "frame.png")
+CIRCLE_PATH = os.path.join(IMAGE_PATH, "circle.png")
 
 # lookup for the GUI to connect the piece integer code from the chess module with the according image path
 PIECE_TILES = {my_chess.BPAWN: BPAWN_PATH, my_chess.WPAWN: WPAWN_PATH, my_chess.BKING: BKING_PATH, my_chess.WKING: WKING_PATH, my_chess.BQUEEN: BQUEEN_PATH, my_chess.WQUEEN: WQUEEN_PATH, my_chess.BKNIGHT: BKNIGHT_PATH, my_chess.WKNIGHT: WKNIGHT_PATH, my_chess.BROOK: BROOK_PATH, my_chess.WROOK: WROOK_PATH, my_chess.BBISHOP: BBISHOP_PATH, my_chess.WBISHOP: WBISHOP_PATH, my_chess.NO_PIECE: NO_PIECE_PATH}
@@ -56,6 +81,9 @@ PROMOTE = {
             my_chess.BLACK: [BQUEEN_PATH, BROOK_PATH, BBISHOP_PATH, BKNIGHT_PATH]},
     "keys": {WQUEEN_PATH: "Q", WROOK_PATH: "R", WBISHOP_PATH: "B", WKNIGHT_PATH: "N",
             BQUEEN_PATH: "q", BROOK_PATH: "r", BBISHOP_PATH: "b", BKNIGHT_PATH: "n"}}
+
+# accessing all board squares without needing to set up for loops
+BOARD_SQ_LIST = [(y,x) for x in range(8) for y in range(8)]
 
 # endregion
 
@@ -95,12 +123,17 @@ class Game:
 
         # setting up a variable that can buffer a clicked button key. this is necessary because a move requires 2 clicks by the user (from -> to)
         selected = None
+        normal_moves, promote_moves = None, None
         
         # the main loop for the game
         while True:
             
+            if not normal_moves:
+                normal_moves, promote_moves = self.bc.split_legal_moves()
+
             # window is freezed once game over
             if self.bc.gameover:
+                print(f"gameover: {self.bc.gameover}")
                 event, value = self.w.read()
                 if event == sg.WIN_CLOSED:
                     break                
@@ -115,15 +148,20 @@ class Game:
                         # de-selection if the same square is selected twice in a row
                         if selected == event:
                             selected = None
+                            self.update_board_display(selected)
                         else:
                             # making a move if possible, then updating the GUI, then resetting the selection. note that we have a special case of a move which can promote a pawn. to get this working we need to distinguish between normal and promotion moves and get a user input mid-game for the promotion move
-                            normal_moves, promote_moves = self.bc.split_legal_moves()
                             
                             if (selected, event) in normal_moves:
                                 new_move = (selected, event)
-                                sqlist = self.bc.commit_move(new_move)
-                                self.update_squares(sqlist)
                                 selected = None
+
+                                sqlist = self.bc.commit_move(new_move)
+                                normal_moves, promote_moves = None, None
+                                
+                                self.update_board_display(selected)
+                                self.hightlight_last_move()
+                                
                             
                             elif (selected, event) in [(from_sq, to_sq) for (from_sq, to_sq, _) in promote_moves]:
                                 promote = self.popup_promotion()
@@ -131,33 +169,41 @@ class Game:
                                 # if no promotion is chosen, no move is executed
                                 if promote:
                                     new_move = (selected, event, promote)
-                                    sqlist = self.bc.commit_move(new_move)
-                                    self.update_squares(sqlist)
                                     selected = None
+                                    
+                                    sqlist = self.bc.commit_move(new_move)
+                                    normal_moves, promote_moves = None, None
+
+                                    self.update_board_display(selected)
+                                    self.hightlight_last_move()
+                                    
                                 else:
                                     selected = None
+                                    self.update_board_display(selected)
 
-                            # TODO can still play after gameover, need to implement some stopping mechanism in the GUI
-                            if self.bc.gameover:
-                                print(f"gameover: {self.bc.gameover}")
 
-                            
                             # changing the selection in case one own piece is selected after one own piece already being in the selection variable
                             else:
                                 sq = self.bc.board[event[0]][event[1]]
                                 selected = event if sq.color == self.bc.to_move else None
+                                self.update_board_display(selected, normal_moves+promote_moves)
 
                     # no square yet selected means we just set variable selected to that square
                     else:
                         selected = event
+                        self.update_board_display(selected, normal_moves+promote_moves)
             
             # bot to move
             else:
                 bot_move = self.bot.search()
                 if bot_move:
                     sqlist = self.bc.commit_move(bot_move)
+                    normal_moves, promote_moves = None, None
                     self.update_squares(sqlist)
-
+                    self.hightlight_last_move()
+            
+            self.w.refresh()
+        
         self.w.close()
 
     # each time after a move is made, the pieces on the board change positions. this function loops over the squares that have been affected and updates the respective elements in the GUI
@@ -165,7 +211,57 @@ class Game:
         for sq in sqlist:
             val = self.bc.board[sq[0]][sq[1]]
             self.w[sq].update(image_filename=PIECE_TILES[val.content])
-        self.w.refresh()
+        
+    # we could remove this function, as update_board_display does the same, but this one does less work and can be used if it is the bots turn, so we keep it to save some calculations
+    def hightlight_last_move(self):
+        
+        # clear previous move highlight
+        if len(self.bc.changes) > 1:
+            previous_move = self.bc.changes[-2]['last_move']
+            for sq in previous_move:
+                val = self.bc.board[sq[0]][sq[1]]
+                self.w[sq].update(image_filename=PIECE_TILES[val.content])
+
+        # add last move highlight
+        current_move = self.bc.changes[-1]['last_move']
+        for sq in current_move:
+            val = self.bc.board[sq[0]][sq[1]]
+            highlighted_img = convert_to_bytes(overlay(PIECE_TILES[val.content], FRAME_PATH))
+            self.w[sq].update(image_data=highlighted_img)
+    
+    # this function clears previous square highlights, except those of the last move, and highlights new squares, based on the current selection and legal moves of the selected piece
+    def update_board_display(self, selected, legal_moves=None):
+
+        last_move = self.bc.changes[-1]['last_move'] if self.bc.changes else None
+
+        # first clearing all previous highlights except the last move by re-loading the standard tiles
+        if last_move:
+            for sq in BOARD_SQ_LIST:
+                val = self.bc.board[sq[0]][sq[1]]
+                if sq not in last_move:
+                    self.w[sq].update(image_filename=PIECE_TILES[val.content])
+                else:
+                    highlighted_img = convert_to_bytes(overlay(PIECE_TILES[val.content], FRAME_PATH))
+                    self.w[sq].update(image_data=highlighted_img)
+        else:
+            for sq in BOARD_SQ_LIST:
+                val = self.bc.board[sq[0]][sq[1]]
+                self.w[sq].update(image_filename=PIECE_TILES[val.content])
+        
+        # highlighting relevant squares based on the current selection if there is one
+        if selected:
+            # selected piece square
+            val = self.bc.board[selected[0]][selected[1]]
+            highlighted_img = convert_to_bytes(overlay(PIECE_TILES[val.content], CIRCLE_PATH))
+            self.w[selected].update(image_data=highlighted_img)
+            
+            # reachable squares for that piece
+            reachable_sq = [x[1] for x in legal_moves if x[0] == selected]
+            for sq in reachable_sq:
+                val = self.bc.board[sq[0]][sq[1]]
+                highlighted_img = convert_to_bytes(overlay(PIECE_TILES[val.content], CIRCLE_PATH))
+                self.w[sq].update(image_data=highlighted_img)
+
 
     # this function gets additional user input in case a promotion move is made and returns the choice
     def popup_promotion(self):
@@ -190,5 +286,6 @@ if __name__ == "__main__":
     g = Game()
     g.new_game(my_chess.WHITE)
     #g.game_from_FEN("8/4k3/8/1R6/R7/3K4/8/8 w - - 0 1", my_chess.WHITE)
+
 
 

@@ -7,7 +7,7 @@ The goal of this project is to program a playable chess game in Python. It will 
 
 ### Quick Start Guide
 
-Python3 needs to be already installed on your system.
+Python3 needs to be already installed on your system and your system must know its path. Updating the PATH if that is not the case will differ depending on your system, so I can't describe it here.
 
 All modules used by this project also need to be installed. If you don't already have them, you can run the following code from the console while in the mchess directory:
 
@@ -15,7 +15,7 @@ All modules used by this project also need to be installed. If you don't already
 pip install -r requirements.txt
 ```
 
-To start the game, run the following command from the console:
+To start the game, run the following command from the console: (Depending on your system you might need to use "python" instead of "python3")
 
 ```
 python3 main.py
@@ -142,7 +142,6 @@ Note that only the most recent version is published in this repository. The info
 - Program interface for Lichess and let the bot play there on a registered bot account
 
 *GUI*
-- Image overlay in the GUI for highlighting of board squares (possible moves, last move)
 - Show square file and rank names
 - Simple menu for selecting color and starting position (FEN)
 - Allow flipped display of the board

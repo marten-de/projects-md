@@ -447,7 +447,6 @@ class Board:
                 "castling_rights": [], 
                 "kings": None})
 
-        # just for debugging, can be removed later
         self.changes[-1]['last_move'] = fromto
 
         # setting up local variables
@@ -489,7 +488,7 @@ class Board:
                 sq_rookmove, _, _ = self.move(CASTLE['rookmove'][fromto], backup=False)
                 squares.extend(sq_rookmove)
                 
-                # re-updating the last move the the kings move instead of the rooks move
+                # re-updating the last move to be the kings move instead of the rooks move
                 self.changes[-1]['last_move'] = fromto
             
             self.update_kings(moved_piece, fromto)
