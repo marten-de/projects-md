@@ -7,21 +7,28 @@ The goal of this project is to program a playable chess game in Python. It will 
 
 ### Quick Start Guide
 
+This project comes with a version that is in active development and uses Python + C and a version that is "pure Python". If you have trouble getting the development version to work, because of the C components, you can use the pure Python version, in which case you need to navigate to the "pure_python_standalone" folder as your main directory. Otherwise, "mchess" is the main directory.
+
 Python3 needs to be already installed on your system and your system must know its path. Updating the PATH if that is not the case will differ depending on your system, so I can't describe it here.
 
-All modules used by this project also need to be installed. If you don't already have them, you can run the following code from the console while in the mchess directory:
+All modules used by this project also need to be installed. If you don't already have them, you can run the following command from the console while in the according directory:
 
 ```
 pip install -r requirements.txt
 ```
 
-To start the game, run the following command from the console: (Depending on your system you might need to use "python" instead of "python3")
+(If you use the pure Python version, you can skip the following step) The C extension part of the project needs to be compiled for your system specifically. In order to do this, you need to have a C compiler installed (such as gcc or clang) and you need to run the following command, which will build the executable that can be accessed by the python modules:
+```
+python3 setup.py build_ext --inplace
+```
+
+To start the game, run the following command from the console: (Depending on your system you might need to use "python" or "py" instead of "python3")
 
 ```
-python3 main.py
+python3 mchess.py
 ```
 
-A game where you play as white will start, the bot will play black in this case. Once the game ends, a message about the result will be printed to the console (not the GUI) and no further action will be possible in the GUI. So just close the window and re-launch "main.py" for another game!
+A game where you play as white will start, the bot will play black in this case. Once the game ends, a message about the result will be printed to the console (not the GUI) and no further action will be possible in the GUI. So just close the window and re-launch "mchess.py" for another game!
 
 If you want to play as black, you need to change the parameter "my_chess.WHITE" to "my_chess.BLACK" in the main function. Note that this is not recommended in the current version, because the board display can not be flipped yet.
 
@@ -57,7 +64,7 @@ I try to annotate my code well, so I am only giving a brief overview here. If yo
 
 The main part of the project is the chess module. It is programmed as a board class and a piece class. The piece class holds information about what type of piece (and color) it is, and all the other information (such as which piece is standing where on the board, whose turn it is, is the king standing in check, etc.) is held by the board class.
 
-The board is represented by a 2d-array, and each square points to a piece instance, even those that don't hold a piece. The representation of a given chess position like that is easy, and the loading of a position by custom FEN (as can be output e.g. by Lichess board editor) is not a problem. The first challenge is to find out which moves can be played in a position. To do that, a loop goes through all the pieces of the player that is to move, accesses their movement patterns, and then sees if those moves can be played on the board. Multiple cases need to be considered here, such as squares occupied by enemy or own pieces, out of bounds (not on the board any more). Also, chess has special moves, namely En Passant and Castles, which come with their own prerequisites and consequences and were responsible for a major amount of bugs in development, because they need an extensive amount of properly sequenced conditions to handle them correctly.
+The board is represented by a 2d-array (updated to a 1-d array in v4), and each square points to a piece instance (updated to integer representation in v4), even those that don't hold a piece. The representation of a given chess position like that is easy, and the loading of a position by custom FEN (as can be output e.g. by Lichess board editor) is not a problem. The first challenge is to find out which moves can be played in a position. To do that, a loop goes through all the pieces of the player that is to move, accesses their movement patterns, and then sees if those moves can be played on the board. Multiple cases need to be considered here, such as squares occupied by enemy or own pieces, out of bounds (not on the board any more). Also, chess has special moves, namely En Passant and Castles, which come with their own prerequisites and consequences and were responsible for a major amount of bugs in development, because they need an extensive amount of properly sequenced conditions to handle them correctly.
 
 Once these moves are found, we are not done. The playable moves on the board are only pseudo-legal, because any move that is playable, could potentially result in a position that puts the own king in check, which is illegal in chess. That means, the list of pseudo-legal moves need to be reduced by those moves that would put the king in check, and the most straightforward way to find out which moves those are, is to simulate them all (move -> take back). At this point it becomes clear, why the program does so many calculations and ends up being slow.
 
@@ -83,7 +90,7 @@ The main weakness of the bot so far is speed. Especially compared to the inspira
 
 Another weakness is the reliance of the bot on human experience. So far, many of the evaluation factors that the bot uses as parameters to judge a certain board position, are given by me. I only have average playing strength, so this is certainly not ideal, but at least I can rely on extensive research in this field. However, even if I was a strong player, it would still not be clear if the parameters combine well, or if they would need to be tweaked in order to become more reasonable. This would need to be tested with massive simulations and different sets of parameters. It is certainly doable, but simulating a lot of games needs speed, so the previously given weakness needs to be addressed first. Another idea would be to try and eliminate the human factor completely by using a deep learning approach. This is something that I want to try in the future, especially to see how this AI-bot would compare against the algorithm-based (conventional) bot.
 
-Lastly, I suspect that the issues given in the previous paragraph lead to some unpredictable behavior of the bot. This could explain the massive spread in puzzle performance: The bot is able to solve very hard puzzles of almost 2800 rating, but at the same time it fails some extremely easy puzzles of below 500 rating. I didn't look into this issue closely yet, it could also be possible that the bot finds a strong move in those positions, but since it is not the absolute best move (as found by stockfish engine), it is rejected and the puzzle counts as failed. This is more likely for easy puzzles, since very hard puzzles usually only have 1 good move, with all of the other moves being much worse. However, random unexplainable blunders also happened during game testing, and this is more concerning. It will be one of the next issues that I need to address.
+Lastly, I suspect that the issues given in the previous paragraph lead to some unpredictable behavior of the bot. This could explain the massive spread in puzzle performance: The bot is able to solve very hard puzzles of almost 2800 rating, but at the same time it fails some extremely easy puzzles of below 500 rating (edit: this might be due to very low calculation time given during the testing). I didn't look into this issue closely yet, it could also be possible that the bot finds a strong move in those positions, but since it is not the absolute best move (as found by stockfish engine), it is rejected and the puzzle counts as failed. This is more likely for easy puzzles, since very hard puzzles usually only have 1 good move, with all of the other moves being much worse. However, random unexplainable blunders also happened during game testing, and this is more concerning. It will be one of the next issues that I need to address.
 
 ### Developing Process:
 
@@ -119,21 +126,28 @@ Note that only the most recent version is published in this repository. The info
 *Chess Module*
 - v1: The initial version of the chess module. It contained fully functional representation of the chess board with working rules. No speed optimization yet. GUI module was still included.
 - v2: A vastly faster version. The module needs to do far less computation than v1, but has exactly the same features. GUI module still included.
-- v3 (current): Introduces the "undo-move" mechanic that can take all moves back until the first move that was made. Also includes further speed improvements through better code design, but no optimization through extensions yet. Also, the GUI module is moved to a different file in this version.
+- v3: Introduces the "undo-move" mechanic that can take all moves back until the first move that was made. Also includes further speed improvements through better code design, but no optimization through extensions yet. Also, the GUI module is moved to a different file in this version.
+- v4: The last pure Python version. The internal mechanics have been optimized to give the easiest interface with C, this means as little as possible mixed types or arguments of variable lengths, less dimensions in arrays and also less class usage. The version has slightly better performance than v3. Zobrist hashing is now implemented in this module and has been removed from the bot module.
+- v5 (current): -
 
 *Bot*
 - v1: The initial version of the chess bot. The main idea of this version was to create the link to the chess module and allow for some kind of move evaluation and recursive search to find the best move.
-- v2 (current): Includes much more internal tweaks that help to find the best move than v1. Many ideas here revolve around prioritizing good moves to cut down on calculation time. No speed improvement through extensions yet.
+- v2: Includes much more internal tweaks that help to find the best move than v1. Many ideas here revolve around prioritizing good moves to cut down on calculation time. No speed improvement through extensions yet. Last pure python version.
+- v3: With the changes of the v4 chess class, this module also had to be updated. Zobrist hashing removed and implemented in chess class. Loading of opening database streamlined.
+- v4 (current): -
 
 *GUI*
 - v1 (current): A simple GUI to represent the chess board and allow for play by mouse.
+- v2: Updated to work with changed internal mechanics of v4 chess class
+- v3 (current): -
 
 ### Possible Future Tweaks and Changes
 
 *Chess Module*
-- Improve calculation speed of the bot and/ or chess module by using NumPy, Cython, Numba, Jax, PyPI, custom C extensions, ...
+- Make sure that constants only show up in one place, pass from module to module if necessary or at least mark critical variables
 - Adjust instance variable status private/ public (so far all are public)
 - Allow tracking of moves back and forth (so far only undoing moves is possible)
+- Implement incremental change of zobrist hash instead of re-calculation from scratch each time
 
 *Bot*
 - Track down reason for big spread in puzzle performance and random blunders
@@ -146,5 +160,5 @@ Note that only the most recent version is published in this repository. The info
 - Simple menu for selecting color and starting position (FEN)
 - Allow flipped display of the board
 - Find or create better tile images (currently a bit blurry)
-- Implement time controls
+- Implement time controls (will also affect chess and bot modules)
 
