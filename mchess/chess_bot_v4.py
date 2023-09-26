@@ -12,7 +12,7 @@ import json
 import sys # for performance analysis
 import cProfile # for timing and performance optimization
 
-import chess_v4 as my_chess
+import chess_v5 as my_chess
 
 
 """HELPER FUNCTIONS"""

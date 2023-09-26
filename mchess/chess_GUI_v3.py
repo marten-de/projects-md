@@ -6,8 +6,8 @@ from PIL import Image
 import io
 import base64
 
-import chess_v4 as my_chess
-import chess_bot_v3 as my_bot
+import chess_v5 as my_chess
+import chess_bot_v4 as my_bot
 
 
 """HELPER FUNCTIONS"""
@@ -259,10 +259,11 @@ class Game:
         
         # highlighting relevant squares based on the current selection if there is one
         if selected:
-            # selected piece square
-            val = self.bc.board[YX2INT[(selected[0],selected[1])]]
-            highlighted_img = convert_to_bytes(overlay(PIECE_TILES[val], CIRCLE_PATH))
-            self.w[selected].update(image_data=highlighted_img)
+            # selected piece square, if it is indeed our own piece
+            if YX2INT[(selected[0],selected[1])] in self.bc.piece_loc[self.bc.to_move]:
+                val = self.bc.board[YX2INT[(selected[0],selected[1])]]
+                highlighted_img = convert_to_bytes(overlay(PIECE_TILES[val], CIRCLE_PATH))
+                self.w[selected].update(image_data=highlighted_img)
             
             # reachable squares for that piece
             reachable_sq = [(x[2],x[3]) for x in legal_moves if (x[0],x[1]) == selected]

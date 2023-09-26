@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 
-import chess_v4 as my_chess
-import chess_GUI_v2 as my_gui
-import chess_bot_v3 as my_bot
+import chess_v5 as my_chess
+import chess_GUI_v3 as my_gui
+import chess_bot_v4 as my_bot
 
 
 if __name__ == "__main__":

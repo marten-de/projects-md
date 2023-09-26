@@ -7,6 +7,11 @@ import json
 import os
 import random
 
+# functions written in C
+from chess_extension import check_possible_king_capt
+from chess_extension import update_reachable
+from chess_extension import pseudo_legal_moves
+
 import cProfile # for timing and performance optimization
 
 import chess # only for debugging
@@ -45,7 +50,7 @@ def test_module():
     with open(TEST_POSITIONS_FILE) as json_file:
         tests = json.load(json_file)
 
-    for test in tests[0:9]:
+    for test in tests:
         # preparing the test input
         debug_fen = test['fen']
         depth = test['depth']
@@ -130,17 +135,17 @@ PIECE_MOVEMENT_PATTERNS = {
 
 # lookup for everything related to the special move castle
 CASTLE = {
-    "empty": {"K": [5,6], "Q": [1,2,3],
-            "k": [61,62], "q": [57,58,59]},
-    "kingmove": {"K": (0,4,0,6,0), "Q": (0,4,0,2,0),
-            "k": (7,4,7,6,0), "q": (7,4,7,2,0)},
+    "empty": {WKING: [5,6], WQUEEN: [1,2,3],
+            BKING: [61,62], BQUEEN: [57,58,59]},
+    "kingmove": {WKING: (0,4,0,6,0), WQUEEN: (0,4,0,2,0),
+            BKING: (7,4,7,6,0), BQUEEN: (7,4,7,2,0)},
     "rookmove": {(0,4,0,6,0): (0,7,0,5,0), (0,4,0,2,0): (0,0,0,3,0),
             (7,4,7,6,0): (7,7,7,5,0), (7,4,7,2,0): (7,0,7,3,0)},
     "check": {(0,4,0,6,0): [4,5,6], (0,4,0,2,0): [4,3,2],
             (7,4,7,6,0): [60,61,62], (7,4,7,2,0): [60,59,58]},
     "update": {(0,4,0,6,0): [4,5,6,7], (0,4,0,2,0): [4,3,2,0],
             (7,4,7,6,0): [60,61,62,63], (7,4,7,2,0): [60,59,58,56]},
-    "rights": {0: "Q", 7: "K", 56: "q", 63: "k"}}
+    "rights": {0: WQUEEN, 7: WKING, 56: BQUEEN, 63: BKING}}
 
 # lookup to handle everything related to special move promotion
 PROMOTE = {
@@ -216,9 +221,9 @@ class Board:
             if c == "-":
                 break
             if c.isupper():
-                self.castling_rights[WHITE].append(c)
+                self.castling_rights[WHITE].append(PIECE_INIT[c])
             else:
-                self.castling_rights[BLACK].append(c)
+                self.castling_rights[BLACK].append(PIECE_INIT[c])
 
         # making sure to only using int for this field, for compatibility with C
         self.en_passant_target = YX2INT[cnote2tuple(fen_fields[3])] if fen_fields[3] != "-" else -1
@@ -244,7 +249,12 @@ class Board:
                     x += int(c)
 
         # update reachable, only needed for the current opponent
-        self.update_reachable(OPPOSITE[self.to_move])
+        # C ext
+        self.reachable[OPPOSITE[self.to_move]] = update_reachable(self.piece_loc[OPPOSITE[self.to_move]], self.board, OPPOSITE[self.to_move])
+
+        # python
+        #self.update_reachable(OPPOSITE[self.to_move])
+
 
         # lastly checking if the current player to move is standing in check
         self.update_in_check()
@@ -259,7 +269,7 @@ class Board:
         #snap = self.snapshot()
         self.threefold[self.zobr_hash] += 1
 
-    # this function returns a list of all pseudo legal moves for the player of a certain color (white or black). pseudo legal means the pieces can move in that way, but checks or other "forcing" conditions are not yet looked at. it is quite a lot of code and it would be possible to distribute it to multiple functions, but having it in one place seems to make more sense to me in this case.
+    # python version of the C ext. keep for debug
     def pseudo_legal_moves(self, color):
         noncaptures, captures = [],[]
 
@@ -354,7 +364,12 @@ class Board:
     def legal_moves(self, onlycaptures=False):
         legal = []
 
-        pseudo_noncaptures, pseudo_captures = self.pseudo_legal_moves(self.to_move)
+        
+        # C ext
+        pseudo_noncaptures, pseudo_captures = pseudo_legal_moves(self.piece_loc[self.to_move],self.board,self.castling_rights[self.to_move],self.to_move,self.en_passant_target)
+
+        # python
+        #pseudo_noncaptures, pseudo_captures = self.pseudo_legal_moves(self.to_move)
 
         own_pseudo_legal = pseudo_captures if onlycaptures else pseudo_captures+pseudo_noncaptures
 
@@ -381,9 +396,14 @@ class Board:
                     self.move(move)
 
                     # move is legal and can be appended to list of legal moves
-                    if self.check_possible_king_capt(self.opponent) == False:
+                    # C ext
+                    if check_possible_king_capt(self.piece_loc[self.opponent],self.board,self.opponent) == 0:
                         legal.append(move)
             
+                    # python
+                    #if not self.check_possible_king_capt(self.opponent):
+                        #legal.append(move)
+
                     # undoing the simulated move
                     self.undo_move()
                 else:
@@ -399,9 +419,15 @@ class Board:
                         else:
                             self.move(move)
 
-                            if self.check_possible_king_capt(self.opponent) == False:
+                            # C ext
+                            if check_possible_king_capt(self.piece_loc[self.opponent],self.board,self.opponent) == 0:
                                 legal.append(move)
                             
+                            # python
+                            #if not self.check_possible_king_capt(self.opponent):
+                                #legal.append(move)
+
+
                             self.undo_move()
 
         return legal
@@ -418,57 +444,6 @@ class Board:
                 promote_moves.append(m)
         
         return (normal_moves, promote_moves)
-
-    # this function works almost identical to pseudo_legal_moves, but instead of appending all moves to a list, it just checks whether the enemy king can be captured or not and returns as early as possible to save time.
-    def check_possible_king_capt(self, color):
-
-        for sq in self.piece_loc[color]:
-            y,x = INT2YX[sq]
-            f = self.board[sq]
-            piece_type = PIECE_SPLIT[f][1]
-
-            # calculating all pieces except pawns
-            if not piece_type == PAWN:
-                pattern = PIECE_MOVEMENT_PATTERNS[piece_type]
-                for direction in pattern:
-                    for offset in direction:
-                        new_field_coord = (y+offset[0],x+offset[1])
-                        
-                        if new_field_coord not in YX2INT:
-                            break
-                        else:
-                            new_field = YX2INT[new_field_coord]
-
-                        # new field is empty and therefore a valid target field
-                        if self.board[new_field] == NO_PIECE:
-                            continue
-                        # new field occupied by own piece, break this direction early
-                        elif PIECE_SPLIT[self.board[new_field]][0] == color:
-                            break
-                        # new field occupied by opponents king
-                        elif self.board[new_field] == OPPOSITE[color]+KING:
-                            return True
-                        # new field occupied by an enemy piece that is not the king
-                        else:
-                            break
-   
-            # calculating pawns separately because they have special move rules
-            else:
-
-                # implementation of the capturing move for pawns which goes sideways
-                pattern = PIECE_MOVEMENT_PATTERNS[piece_type]['capture']
-                for direction in pattern:
-                    for offset in direction:
-                        new_field = (y+offset[0],x+offset[1]) if color == WHITE else (y-offset[0],x-offset[1])
-                        
-                        # checking for out of bounds, which is possible with sideways capture
-                        if new_field not in YX2INT:
-                            break
-                        # new field is occupied by an enemy piece and therefore a valid target field
-                        elif self.board[YX2INT[new_field]] == OPPOSITE[color]+KING:
-                            return True
-
-        return False
     
     # executing a move on the board. this function provides no protection against passing illegal moves and must therefore be combined with a means of checking for legal moves
     def move(self, move, backup=True):
@@ -566,7 +541,11 @@ class Board:
         piece_color, piece_type = PIECE_SPLIT[moved_piece]
 
         # when committing a move, it makes sense to update this variable, as it is the basis for the  calculation of next moves
-        self.update_reachable(piece_color)
+        # C ext
+        self.reachable[piece_color] = update_reachable(self.piece_loc[piece_color],self.board,piece_color)
+
+        # python
+        #self.update_reachable(piece_color)
 
         self.changes[-1]['half_moves'] = self.half_moves
         if capture or piece_type == PAWN:
@@ -658,78 +637,6 @@ class Board:
                 if CASTLE['rights'][to_sq] in self.castling_rights[OPPOSITE[piece_color]]:
                     self.changes[-1]['castling_rights'].append((OPPOSITE[piece_color],CASTLE['rights'][to_sq]))
                     self.castling_rights[OPPOSITE[piece_color]].remove(CASTLE['rights'][to_sq])  
-
-    # this function keeps track of what the opponent can do on the board. it gives back a dict that is divided into a part that includes all directly reachable squares (by reachable it means takeable here) and a second part that checks if there are lines towards the king, that are currently blocked by enemy pieces. that way we can easily access this information to check if a move we want to make is legal or would result in our king standing in check
-    def update_reachable(self, color):
-
-        self.changes[-1]['reachable'] = (color, self.reachable[color])
-        self.reachable[color] = {"all_direct": set(), "king_indirect_blocked": set(), "pawn_attack": set()}
-
-        for sq in self.piece_loc[color]:
-            y,x = INT2YX[sq]
-            f = self.board[sq]
-            piece_type = PIECE_SPLIT[f][1]
-
-            # calculating all pieces except pawns
-            if not piece_type == PAWN:
-                pattern = PIECE_MOVEMENT_PATTERNS[piece_type]
-                for direction in pattern:
-                    blocking_piece = None
-                    for offset in direction:
-                        new_field_coord = (y+offset[0],x+offset[1])
-                        
-                        if new_field_coord not in YX2INT:
-                            break
-                        else:
-                            new_field = YX2INT[new_field_coord]
-                            new_color = PIECE_SPLIT[self.board[new_field]][0]
-
-                        if not blocking_piece:
-                            
-                            # new field is empty and therefore a valid target field
-                            if self.board[new_field] == NO_PIECE:
-                                self.reachable[color]['all_direct'].add(new_field)
-                            # new field occupied by own piece, break this direction early, but add, since that means protecting the piece
-                            elif new_color == color:
-                                self.reachable[color]['all_direct'].add(new_field)
-                                break
-                            # new field occupied by opponents piece, allow this move (to capture) and then see if the fields behind the blocking piece are the opponents king location
-                            elif new_color == OPPOSITE[color]:
-                                self.reachable[color]['all_direct'].add(new_field)
-                                blocking_piece = new_field
-                        else:
-
-                            # new field is empty, continue looking
-                            if self.board[new_field] == NO_PIECE:
-                                continue
-                            # new field occupied by own piece, break this direction early
-                            elif new_color == color:
-                                break
-                            # found the enemy king, this means a piece has a line towards the king that is blocked by the blocking_piece, which we therefore add to the dict and break
-                            elif self.board[new_field] == OPPOSITE[color]+KING:
-                                self.reachable[color]['king_indirect_blocked'].add(blocking_piece)
-                                break
-                            # in all other cases, e.g. finding another enemy piece, we break without adding anything to the dict
-                            else:
-                                break                       
-
-            # calculating pawns separately because they have special move rules
-            else:
-
-                # only pawn captures need to be considered, as this is about seeing if we can beat the king
-                pattern = PIECE_MOVEMENT_PATTERNS[piece_type]['capture']
-                for direction in pattern:
-                    for offset in direction:
-                        new_field = (y+offset[0],x+offset[1]) if color == WHITE else (y-offset[0],x-offset[1])
-                        
-                        # checking for out of bounds, which is possible with sideways capture
-                        if new_field not in YX2INT:
-                            break
-                        # new field is occupied by an enemy or own piece or empty and therefore a valid target field
-                        else:
-                            self.reachable[color]['all_direct'].add(YX2INT[new_field])
-                            self.reachable[color]['pawn_attack'].add(YX2INT[new_field])
-                            break
 
     # simply returning if the king of the current player is standing in check
     def update_in_check(self):
@@ -884,9 +791,15 @@ class Board:
             print(self) # our own board position
 
             print("pseudo legal:")
-            pseudo = self.pseudo_legal_moves(self.to_move)
-            print(len(pseudo)) # pseudo legal moves for own board
-            print([move2uci(move) for move in pseudo])
+            
+            # C ext
+            pseudo_noncapt, pseudo_capt = pseudo_legal_moves(self.piece_loc[self.to_move],self.board,self.castling_rights[self.to_move],self.to_move,self.en_passant_target)
+
+            # python
+            #pseudo_noncapt, pseudo_capt = self.pseudo_legal_moves(self.to_move)
+            
+            print(len(pseudo_noncapt)+len(pseudo_capt)) # pseudo legal moves for own board
+            print([move2uci(move) for move in pseudo_noncapt+pseudo_capt])
 
             print("legal:") # legal moves for own board
             print(len(my_movelist))
@@ -919,6 +832,129 @@ class Board:
         
         return count
 
+    # python version of the C ext. keep for debug
+    def check_possible_king_capt(self, color):
+
+        for sq in self.piece_loc[color]:
+            y,x = INT2YX[sq]
+            f = self.board[sq]
+            piece_type = PIECE_SPLIT[f][1]
+
+            # calculating all pieces except pawns
+            if not piece_type == PAWN:
+                pattern = PIECE_MOVEMENT_PATTERNS[piece_type]
+                for direction in pattern:
+                    for offset in direction:
+                        new_field_coord = (y+offset[0],x+offset[1])
+                        
+                        if new_field_coord not in YX2INT:
+                            break
+                        else:
+                            new_field = YX2INT[new_field_coord]
+
+                        # new field is empty and therefore a valid target field
+                        if self.board[new_field] == NO_PIECE:
+                            continue
+                        # new field occupied by own piece, break this direction early
+                        elif PIECE_SPLIT[self.board[new_field]][0] == color:
+                            break
+                        # new field occupied by opponents king
+                        elif self.board[new_field] == OPPOSITE[color]+KING:
+                            return True
+                        # new field occupied by an enemy piece that is not the king
+                        else:
+                            break
+   
+            # calculating pawns separately because they have special move rules
+            else:
+
+                # implementation of the capturing move for pawns which goes sideways
+                pattern = PIECE_MOVEMENT_PATTERNS[piece_type]['capture']
+                for direction in pattern:
+                    for offset in direction:
+                        new_field = (y+offset[0],x+offset[1]) if color == WHITE else (y-offset[0],x-offset[1])
+                        
+                        # checking for out of bounds, which is possible with sideways capture
+                        if new_field not in YX2INT:
+                            break
+                        # new field is occupied by an enemy piece and therefore a valid target field
+                        elif self.board[YX2INT[new_field]] == OPPOSITE[color]+KING:
+                            return True
+
+        return False
+
+    # python version of the C ext. keep for debug
+    def update_reachable(self, color):
+
+        self.changes[-1]['reachable'] = (color, self.reachable[color])
+        self.reachable[color] = {"all_direct": set(), "king_indirect_blocked": set(), "pawn_attack": set()}
+
+        for sq in self.piece_loc[color]:
+            y,x = INT2YX[sq]
+            f = self.board[sq]
+            piece_type = PIECE_SPLIT[f][1]
+
+            # calculating all pieces except pawns
+            if not piece_type == PAWN:
+                pattern = PIECE_MOVEMENT_PATTERNS[piece_type]
+                for direction in pattern:
+                    blocking_piece = None
+                    for offset in direction:
+                        new_field_coord = (y+offset[0],x+offset[1])
+                        
+                        if new_field_coord not in YX2INT:
+                            break
+                        else:
+                            new_field = YX2INT[new_field_coord]
+                            new_color = PIECE_SPLIT[self.board[new_field]][0]
+
+                        if not blocking_piece:
+                            
+                            # new field is empty and therefore a valid target field
+                            if self.board[new_field] == NO_PIECE:
+                                self.reachable[color]['all_direct'].add(new_field)
+                            # new field occupied by own piece, break this direction early, but add, since that means protecting the piece
+                            elif new_color == color:
+                                self.reachable[color]['all_direct'].add(new_field)
+                                break
+                            # new field occupied by opponents piece, allow this move (to capture) and then see if the fields behind the blocking piece are the opponents king location
+                            elif new_color == OPPOSITE[color]:
+                                self.reachable[color]['all_direct'].add(new_field)
+                                blocking_piece = new_field
+                        else:
+
+                            # new field is empty, continue looking
+                            if self.board[new_field] == NO_PIECE:
+                                continue
+                            # new field occupied by own piece, break this direction early
+                            elif new_color == color:
+                                break
+                            # found the enemy king, this means a piece has a line towards the king that is blocked by the blocking_piece, which we therefore add to the dict and break
+                            elif self.board[new_field] == OPPOSITE[color]+KING:
+                                self.reachable[color]['king_indirect_blocked'].add(blocking_piece)
+                                break
+                            # in all other cases, e.g. finding another enemy piece, we break without adding anything to the dict
+                            else:
+                                break                       
+
+            # calculating pawns separately because they have special move rules
+            else:
+
+                # only pawn captures need to be considered, as this is about seeing if we can beat the king
+                pattern = PIECE_MOVEMENT_PATTERNS[piece_type]['capture']
+                for direction in pattern:
+                    for offset in direction:
+                        new_field = (y+offset[0],x+offset[1]) if color == WHITE else (y-offset[0],x-offset[1])
+                        
+                        # checking for out of bounds, which is possible with sideways capture
+                        if new_field not in YX2INT:
+                            break
+                        # new field is occupied by an enemy or own piece or empty and therefore a valid target field
+                        else:
+                            self.reachable[color]['all_direct'].add(YX2INT[new_field])
+                            self.reachable[color]['pawn_attack'].add(YX2INT[new_field])
+                            break
+
     # printing the board mainly for quick testing and debugging. a proper graphical interface is implemented separately
     def __str__(self):
         output = '\n'
@@ -937,3 +973,74 @@ if __name__ == "__main__":
 
     cProfile.run('test_module()')
 
+
+
+"""
+        self.reachable[color] = {"all_direct": set(), "king_indirect_blocked": set(), "pawn_attack": set()}
+
+        for sq in self.piece_loc[color]:
+            y,x = INT2YX[sq]
+            f = self.board[sq]
+            piece_type = PIECE_SPLIT[f][1]
+
+            # calculating all pieces except pawns
+            if not piece_type == PAWN:
+                pattern = PIECE_MOVEMENT_PATTERNS[piece_type]
+                for direction in pattern:
+                    blocking_piece = None
+                    for offset in direction:
+                        new_field_coord = (y+offset[0],x+offset[1])
+                        
+                        if new_field_coord not in YX2INT:
+                            break
+                        else:
+                            new_field = YX2INT[new_field_coord]
+                            new_color = PIECE_SPLIT[self.board[new_field]][0]
+
+                        if not blocking_piece:
+                            
+                            # new field is empty and therefore a valid target field
+                            if self.board[new_field] == NO_PIECE:
+                                self.reachable[color]['all_direct'].add(new_field)
+                            # new field occupied by own piece, break this direction early, but add, since that means protecting the piece
+                            elif new_color == color:
+                                self.reachable[color]['all_direct'].add(new_field)
+                                break
+                            # new field occupied by opponents piece, allow this move (to capture) and then see if the fields behind the blocking piece are the opponents king location
+                            elif new_color == OPPOSITE[color]:
+                                self.reachable[color]['all_direct'].add(new_field)
+                                blocking_piece = new_field
+                        else:
+
+                            # new field is empty, continue looking
+                            if self.board[new_field] == NO_PIECE:
+                                continue
+                            # new field occupied by own piece, break this direction early
+                            elif new_color == color:
+                                break
+                            # found the enemy king, this means a piece has a line towards the king that is blocked by the blocking_piece, which we therefore add to the dict and break
+                            elif self.board[new_field] == OPPOSITE[color]+KING:
+                                self.reachable[color]['king_indirect_blocked'].add(blocking_piece)
+                                break
+                            # in all other cases, e.g. finding another enemy piece, we break without adding anything to the dict
+                            else:
+                                break                       
+
+            # calculating pawns separately because they have special move rules
+            else:
+
+                # only pawn captures need to be considered, as this is about seeing if we can beat the king
+                pattern = PIECE_MOVEMENT_PATTERNS[piece_type]['capture']
+                for direction in pattern:
+                    for offset in direction:
+                        new_field = (y+offset[0],x+offset[1]) if color == WHITE else (y-offset[0],x-offset[1])
+                        
+                        # checking for out of bounds, which is possible with sideways capture
+                        if new_field not in YX2INT:
+                            break
+                        # new field is occupied by an enemy or own piece or empty and therefore a valid target field
+                        else:
+                            self.reachable[color]['all_direct'].add(YX2INT[new_field])
+                            self.reachable[color]['pawn_attack'].add(YX2INT[new_field])
+                            break
+"""

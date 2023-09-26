@@ -86,7 +86,7 @@ Lastly, I also included an unrelated script "bot_vs_bot.py" in this repository, 
 
 ### Limits of mchess
 
-The main weakness of the bot so far is speed. Especially compared to the inspiration for my project that was written in C#, the speed difference becomes very obvious. The playing strength of a chess bot comes from being able to calculate many moves deep, and so far my bot can only reasonably use a depth of 7-8 moves without taking an unreasonable amount of time. This is of course due to Python being an interpreted language. I think I can still optimize my code "in-Python" at some areas, but in the end it also means I need to find a way to bypass Python's weakness by using special extension modules such as NumPy, Cython, etc. or even writing my own extension in C. This will be one of the major next steps in this project. Note that it will affect both the bot as well as the chess module, because the slow speed of the bot originates in part from the slow move calculation of the chess module.
+The main weakness of the bot so far is speed. Especially compared to the inspiration for my project that was written in C#, the speed difference becomes very obvious. The playing strength of a chess bot comes from being able to calculate many moves deep, and so far my bot can only reasonably use a depth of 7-8 moves without taking an unreasonable amount of time. This is of course due to Python being an interpreted language. I think I can still optimize my code "in-Python" at some areas, but in the end it also means I need to find a way to bypass Python's weakness by using special extension modules such as NumPy, Cython, etc. or even writing my own extension in C. This will be one of the major next steps in this project. Note that it will affect both the bot as well as the chess module, because the slow speed of the bot originates in part from the slow move calculation of the chess module. Update: Even after using a C extension to bring down the runtime of some bottleneck functions, the bot is still a lot slower than anything written in a purely compiled lanugage.
 
 Another weakness is the reliance of the bot on human experience. So far, many of the evaluation factors that the bot uses as parameters to judge a certain board position, are given by me. I only have average playing strength, so this is certainly not ideal, but at least I can rely on extensive research in this field. However, even if I was a strong player, it would still not be clear if the parameters combine well, or if they would need to be tweaked in order to become more reasonable. This would need to be tested with massive simulations and different sets of parameters. It is certainly doable, but simulating a lot of games needs speed, so the previously given weakness needs to be addressed first. Another idea would be to try and eliminate the human factor completely by using a deep learning approach. This is something that I want to try in the future, especially to see how this AI-bot would compare against the algorithm-based (conventional) bot.
 
@@ -120,6 +120,10 @@ Another unexpected behavior I ran into was when I set the evaluation value for a
 
 The last issue I want to describe here for now, is that the zobrist hash that the bot uses to quickly find already encountered positions, is so far calculated anew each time. This is inefficient, especially since zobrist hashes are easily updateable after a position changes. However, implementing this would mean I had to implement the zobrist hash in the chess class instead of the bot class, so for now I will leave this issue. The performance loss is not big compared to other issues in the code, so addressing those first will make more sense.
 
+While trying to find a way to speed up the code of the chess module, I researched about many options, such as Numba (compiles part of the code just-in-time), Cython (translates code to C and then compiles it), NumPy (module that is very fast for math operations especially on large matrixes) and writing of my own C extension. It turns out that NumPy is only of limited use, because my code doesn't do a lot of math operations, but instead a lot of checks and changing of internal variables, all requiring python operations, so I really struggled to find any use for Numpy. Cython on the other hand was able to convert my code to a cryptic looking C file and compile. The speed up was noticeable (between 50-70%), but I ended up not taking this option because it makes my development too inflexible. Applying Cython only to single functions would be an option, but I didn't succeed in doing that, as a lot of inefficiencies happend at the interface between Python and C, and I did not understand enough of what Cython does to handle these problems. Numba finally, did not work for me at all. I had read it has a lot of constraints, and it seemed that my code did not meet those, as it just produced errors when trying to use Numba jit/njit decorators. In the end I opted to write my own C extension. The interface Python<->C was much clearer for me to understand (even though I had to spend some time researching how to convert datatypes back and forth), and it meant I could outsource some bottleneck functions, without losing flexibility in the rest of my code. In an arbitrary testcase I previously had a runtime of about 30s, and after implementing 3 functions completely in C, the runtime came down to 15s, so I was quite happy with this experiment.
+
+However, after testing the bot, my code crashed because of Python using too much memory. This had not happened before, so it must have had something to do with the new C extension. I know that C gives much more power to the programmer, but it seems in my case I did not completely understood how my code handles memory, so I needed to go back to that and fix it. It turns out that while creating Python objects that I would give back to Python after finishing the calculation in the extension, I did not dereference them after their creation and use. This is fine for objects that are returned to Python, as this will be handled by the Python side in this case. However, intermediary objects, such as tuples that I then appended to a list (which will be returned), will continue to exist in memory if they are not dereferenced. Because my code does so many calculations, this meant that memory will fill up hundreds of MB in seconds! This was indeed lucky, because I could spot the flaw in my code and edit it, so that there were no further memory leaks. This also lead to a further (small) speed boost, which makes sense.
+
 ### Version History Summary
 Note that only the most recent version is published in this repository. The information in this chapter is just for reference.
 
@@ -128,7 +132,7 @@ Note that only the most recent version is published in this repository. The info
 - v2: A vastly faster version. The module needs to do far less computation than v1, but has exactly the same features. GUI module still included.
 - v3: Introduces the "undo-move" mechanic that can take all moves back until the first move that was made. Also includes further speed improvements through better code design, but no optimization through extensions yet. Also, the GUI module is moved to a different file in this version.
 - v4: The last pure Python version. The internal mechanics have been optimized to give the easiest interface with C, this means as little as possible mixed types or arguments of variable lengths, less dimensions in arrays and also less class usage. The version has slightly better performance than v3. Zobrist hashing is now implemented in this module and has been removed from the bot module.
-- v5 (current): -
+- v5 (current): C extension included for 3 bottleneck functions (check_possible_king_capt, update_reachable, pseudo_legal_moves).
 
 *Bot*
 - v1: The initial version of the chess bot. The main idea of this version was to create the link to the chess module and allow for some kind of move evaluation and recursive search to find the best move.
@@ -139,7 +143,7 @@ Note that only the most recent version is published in this repository. The info
 *GUI*
 - v1 (current): A simple GUI to represent the chess board and allow for play by mouse.
 - v2: Updated to work with changed internal mechanics of v4 chess class
-- v3 (current): -
+- v3 (current): Fixed highlighting of squares, now only works if the own pieces are clicked
 
 ### Possible Future Tweaks and Changes
 
@@ -152,7 +156,7 @@ Note that only the most recent version is published in this repository. The info
 *Bot*
 - Track down reason for big spread in puzzle performance and random blunders
 - Try out Python's deep learning module to make the chess bot stronger through playing against itself
-- Implement fixed movetime (currently minimum movetime plus a flexible amount)
+- Implement fixed movetime (currently minimum movetime plus a flexible amount), could also be helpful to prevent the bot from not finishing to search
 - Program interface for Lichess and let the bot play there on a registered bot account
 
 *GUI*
