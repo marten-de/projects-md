@@ -155,7 +155,8 @@ Note that only the most recent version is published in this repository. The info
 
 *Bot*
 - Track down reason for big spread in puzzle performance and random blunders
-- Try out Python's deep learning module to make the chess bot stronger through playing against itself
+- Random error in order_moves: tries to remove a move from the list that is not in it? should not be possible
+- Try out Python's deep learning module (reference: https://github.com/davidADSP/SIMPLE) to make the chess bot stronger through playing against itself, will be challenging because I would need to program the interface to this package
 - Implement fixed movetime (currently minimum movetime plus a flexible amount), could also be helpful to prevent the bot from not finishing to search
 - Program interface for Lichess and let the bot play there on a registered bot account
 
