@@ -482,7 +482,7 @@ class Chessbot:
         # if a move is manually passed to the function, that means we want this exact move to be at the very start of the list
         if start_move:
             list1 = [x[1] for x in ordered_moves]
-            list1.remove(start_move)
+            #list1.remove(start_move)
             return [start_move] + list1
         else:
             return [x[1] for x in ordered_moves]
